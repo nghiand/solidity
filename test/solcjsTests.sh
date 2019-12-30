@@ -37,15 +37,18 @@ fi
 SOLJSON="$1"
 VERSION="$2"
 
+echo "Version: $VERSION"
+
 DIR=$(mktemp -d)
 (
     echo "Preparing solc-js..."
-    git clone --depth 1 https://github.com/ethereum/solc-js "$DIR"
+#    git clone --depth 1 https://github.com/ethereum/solc-js "$DIR"
+    git clone --depth 1 --branch v04 https://github.com/nghiand/solc-js "$DIR"
     cd "$DIR"
     # disable "prepublish" script which downloads the latest version
     # (we will replace it anyway and it is often incorrectly cached
     # on travis)
-    npm config set script.prepublish ''
+#    npm config set script.prepublish ''
     npm install
 
     # Replace soljson with current build
@@ -55,7 +58,7 @@ DIR=$(mktemp -d)
 
     # Update version (needed for some tests)
     echo "Updating package.json to version $VERSION"
-    npm version --no-git-tag-version $VERSION
+    npm version --no-git-tag-version "$VERSION"
 
     echo "Running solc-js tests..."
     npm run test

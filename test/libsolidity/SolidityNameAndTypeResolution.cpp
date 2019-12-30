@@ -1485,7 +1485,7 @@ BOOST_AUTO_TEST_CASE(disallow_declaration_of_void_type)
 	CHECK_ERROR(sourceCode, TypeError, "Not enough components (0) in value to assign all variables (1).");
 }
 
-BOOST_AUTO_TEST_CASE(overflow_caused_by_ether_units)
+BOOST_AUTO_TEST_CASE(overflow_caused_by_mcash_units)
 {
 	char const* sourceCodeFine = R"(
 		contract c {
@@ -1499,7 +1499,7 @@ BOOST_AUTO_TEST_CASE(overflow_caused_by_ether_units)
 	char const* sourceCode = R"(
 		contract c {
 			function c () public {
-				 a = 115792089237316195423570985008687907853269984665640564039458 ether;
+				 a = 1157920892373161954235709850086879078532699846656405640394585468741253 mcash;
 			}
 			uint256 a;
 		}
@@ -5331,7 +5331,31 @@ BOOST_AUTO_TEST_CASE(warns_msg_value_in_non_payable_public_function)
 			}
 		}
 	)";
-	CHECK_WARNING(text, "\"msg.value\" used in non-payable function. Do you want to add the \"payable\" modifier to this function?");
+	CHECK_WARNING(text, "\"msg.value\", \"msg.tokenvalue\" and \"msg.tokenid\" used in non-payable function. Do you want to add the \"payable\" modifier to this function?");
+}
+
+BOOST_AUTO_TEST_CASE(warns_msg_token_value_in_non_payable_public_function)
+{
+	char const* text = R"(
+		contract C {
+			function f() view public {
+				msg.tokenvalue;
+			}
+		}
+	)";
+	CHECK_WARNING(text, "\"msg.value\", \"msg.tokenvalue\" and \"msg.tokenid\" used in non-payable function. Do you want to add the \"payable\" modifier to this function?");
+}
+
+BOOST_AUTO_TEST_CASE(warns_msg_token_id_in_non_payable_public_function)
+{
+	char const* text = R"(
+		contract C {
+			function f() view public {
+				msg.tokenvalue;
+			}
+		}
+	)";
+	CHECK_WARNING(text, "\"msg.value\", \"msg.tokenvalue\" and \"msg.tokenid\" used in non-payable function. Do you want to add the \"payable\" modifier to this function?");
 }
 
 BOOST_AUTO_TEST_CASE(does_not_warn_msg_value_in_payable_function)

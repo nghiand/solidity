@@ -315,7 +315,7 @@ class IntegerType: public Type
 public:
 	enum class Modifier
 	{
-		Unsigned, Signed, Address
+		Unsigned, Signed, Address, TokenId
 	};
 	virtual Category category() const override { return Category::Integer; }
 
@@ -345,6 +345,7 @@ public:
 	unsigned numBits() const { return m_bits; }
 	bool isAddress() const { return m_modifier == Modifier::Address; }
 	bool isSigned() const { return m_modifier == Modifier::Signed; }
+    bool isTokenId() const { return m_modifier == Modifier::TokenId; }
 
 	bigint minValue() const;
 	bigint maxValue() const;
@@ -895,6 +896,8 @@ public:
 		Creation, ///< external call using CREATE
 		Send, ///< CALL, but without data and gas
 		Transfer, ///< CALL, but without data and throws on error
+		TransferToken,
+		TokenBalance,
 		SHA3, ///< SHA3
 		Selfdestruct, ///< SELFDESTRUCT
 		Revert, ///< REVERT
@@ -968,6 +971,7 @@ public:
 		Declaration const* _declaration = nullptr,
 		bool _gasSet = false,
 		bool _valueSet = false,
+		bool _tokenSet = false,
 		bool _bound = false
 	):
 		m_parameterTypes(_parameterTypes),
@@ -979,6 +983,7 @@ public:
 		m_arbitraryParameters(_arbitraryParameters),
 		m_gasSet(_gasSet),
 		m_valueSet(_valueSet),
+		m_tokenSet(_tokenSet),
 		m_bound(_bound),
 		m_declaration(_declaration)
 	{
@@ -1076,11 +1081,12 @@ public:
 
 	bool gasSet() const { return m_gasSet; }
 	bool valueSet() const { return m_valueSet; }
+	bool tokenSet() const {return m_tokenSet;}
 	bool bound() const { return m_bound; }
 
 	/// @returns a copy of this type, where gas or value are set manually. This will never set one
 	/// of the parameters to false.
-	TypePointer copyAndSetGasOrValue(bool _setGas, bool _setValue) const;
+	TypePointer copyAndSetGasOrValue(bool _setGas, bool _setValue, bool _setToken) const;
 
 	/// @returns a copy of this function type where all return parameters of dynamic size are
 	/// removed and the location of reference types is changed from CallData to Memory.
@@ -1104,6 +1110,7 @@ private:
 	bool const m_arbitraryParameters = false;
 	bool const m_gasSet = false; ///< true iff the gas value to be used is on the stack
 	bool const m_valueSet = false; ///< true iff the value to be sent is on the stack
+	bool const m_tokenSet = false; ///< true iff token to be sent is on the stack
 	bool const m_bound = false; ///< true iff the function is called as arg1.fun(arg2, ..., argn)
 	Declaration const* m_declaration = nullptr;
 };

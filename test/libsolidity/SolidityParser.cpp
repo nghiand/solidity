@@ -791,15 +791,11 @@ BOOST_AUTO_TEST_CASE(literal_constants_with_ether_subdenominations)
 		contract c {
 			function c ()
 			{
-				 a = 1 wei;
-				 b = 2 szabo;
-				 c = 3 finney;
-				 b = 4 ether;
+				 a = 1 matoshi;
+				 b = 2 mcash;
 			}
 			uint256 a;
 			uint256 b;
-			uint256 c;
-			uint256 d;
 		})";
 	BOOST_CHECK(successParse(text));
 }
@@ -810,7 +806,7 @@ BOOST_AUTO_TEST_CASE(literal_constants_with_ether_subdenominations_in_expression
 		contract c {
 			function c ()
 			{
-				 a = 1 wei * 100 wei + 7 szabo - 3;
+				 a = 1 matoshi * 100 matoshi + 7 mcash - 3;
 			}
 			uint256 a;
 		})";

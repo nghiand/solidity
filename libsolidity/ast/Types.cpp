@@ -310,6 +310,8 @@ TypePointer Type::fromElementaryTypeName(ElementaryTypeNameToken const& _type)
 		return make_shared<FixedBytesType>(1);
 	case Token::Address:
 		return make_shared<IntegerType>(160, IntegerType::Modifier::Address);
+    case Token::TokenId:
+        return make_shared<IntegerType>(256, IntegerType::Modifier::TokenId);
 	case Token::Bool:
 		return make_shared<BoolType>();
 	case Token::Bytes:
@@ -431,7 +433,7 @@ bool isValidShiftAndAmountType(Token::Value _operator, Type const& _shiftAmountT
 	if (_operator == Token::SHR)
 		return false;
 	else if (IntegerType const* otherInt = dynamic_cast<decltype(otherInt)>(&_shiftAmountType))
-		return !otherInt->isAddress();
+		return !(otherInt->isAddress() && otherInt->isTokenId());
 	else if (RationalNumberType const* otherRat = dynamic_cast<decltype(otherRat)>(&_shiftAmountType))
 		return !otherRat->isFractional() && otherRat->integerType() && !otherRat->integerType()->isSigned();
 	else
@@ -453,10 +455,12 @@ IntegerType::IntegerType(unsigned _bits, IntegerType::Modifier _modifier):
 
 string IntegerType::richIdentifier() const
 {
+	if (isTokenId())
+		return "t_token";
 	if (isAddress())
 		return "t_address";
-	else
-		return "t_" + string(isSigned() ? "" : "u") + "int" + std::to_string(numBits());
+	return "t_" + string(isSigned() ? "" : "u") + "int" +
+		   std::to_string(numBits());
 }
 
 bool IntegerType::isImplicitlyConvertibleTo(Type const& _convertTo) const
@@ -468,6 +472,8 @@ bool IntegerType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 			return false;
 		if (isAddress())
 			return convertTo.isAddress();
+		if (isTokenId())
+		    return convertTo.isTokenId();
 		else if (isSigned())
 			return convertTo.isSigned();
 		else
@@ -477,7 +483,7 @@ bool IntegerType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 	{
 		FixedPointType const& convertTo = dynamic_cast<FixedPointType const&>(_convertTo);
 
-		if (isAddress())
+		if (isAddress() || isTokenId())
 			return false;
 		else
 			return maxValue() <= convertTo.maxIntegerValue() && minValue() >= convertTo.minIntegerValue();
@@ -501,7 +507,7 @@ TypePointer IntegerType::unaryOperatorResult(Token::Value _operator) const
 	if (_operator == Token::Delete)
 		return make_shared<TupleType>();
 	// no further unary operators for addresses
-	else if (isAddress())
+	else if (isAddress() || isTokenId())
 		return TypePointer();
 	// for non-address integers, we allow +, -, ++ and --
 	else if (_operator == Token::Add || _operator == Token::Sub ||
@@ -524,6 +530,8 @@ string IntegerType::toString(bool) const
 {
 	if (isAddress())
 		return "address";
+	if (isTokenId())
+	    return "token";
 	string prefix = isSigned() ? "int" : "uint";
 	return prefix + dev::toString(m_bits);
 }
@@ -563,7 +571,7 @@ TypePointer IntegerType::binaryOperatorResult(Token::Value _operator, TypePointe
 	if (Token::isShiftOp(_operator))
 	{
 		// Shifts are not symmetric with respect to the type
-		if (isAddress())
+		if (isAddress() || isTokenId())
 			return TypePointer();
 		if (isValidShiftAndAmountType(_operator, *_other))
 			return shared_from_this();
@@ -583,7 +591,7 @@ TypePointer IntegerType::binaryOperatorResult(Token::Value _operator, TypePointe
 	if (auto intType = dynamic_pointer_cast<IntegerType const>(commonType))
 	{
 		// Nothing else can be done with addresses
-		if (intType->isAddress())
+		if (intType->isAddress() || intType->isTokenId())
 			return TypePointer();
 		// Signed EXP is not allowed
 		if (Token::Exp == _operator && intType->isSigned())
@@ -600,11 +608,13 @@ MemberList::MemberMap IntegerType::nativeMembers(ContractDefinition const*) cons
 	if (isAddress())
 		return {
 			{"balance", make_shared<IntegerType>(256)},
+            {"tokenbalance", make_shared<FunctionType>(strings{"token"}, strings{"uint"}, FunctionType::Kind::TokenBalance, false, StateMutability::View)},
 			{"call", make_shared<FunctionType>(strings(), strings{"bool"}, FunctionType::Kind::BareCall, true, StateMutability::Payable)},
 			{"callcode", make_shared<FunctionType>(strings(), strings{"bool"}, FunctionType::Kind::BareCallCode, true, StateMutability::Payable)},
 			{"delegatecall", make_shared<FunctionType>(strings(), strings{"bool"}, FunctionType::Kind::BareDelegateCall, true)},
 			{"send", make_shared<FunctionType>(strings{"uint"}, strings{"bool"}, FunctionType::Kind::Send)},
-			{"transfer", make_shared<FunctionType>(strings{"uint"}, strings(), FunctionType::Kind::Transfer)}
+			{"transfer", make_shared<FunctionType>(strings{"uint"}, strings(), FunctionType::Kind::Transfer)},
+            {"transfertoken", make_shared<FunctionType>(strings{"uint", "token"}, strings(), FunctionType::Kind::TransferToken)}
 		};
 	else
 		return MemberList::MemberMap();
@@ -822,18 +832,12 @@ tuple<bool, rational> RationalNumberType::isValidLiteral(Literal const& _literal
 	switch (_literal.subDenomination())
 	{
 		case Literal::SubDenomination::None:
-		case Literal::SubDenomination::Wei:
 		case Literal::SubDenomination::Second:
+		case Literal::SubDenomination::Matoshi:
 			break;
-		case Literal::SubDenomination::Szabo:
-			value *= bigint("1000000000000");
-			break;
-		case Literal::SubDenomination::Finney:
-			value *= bigint("1000000000000000");
-			break;
-		case Literal::SubDenomination::Ether:
-			value *= bigint("1000000000000000000");
-			break;
+	    case Literal::SubDenomination::Mcash:
+	        value *= bigint("100000000");
+	        break;
 		case Literal::SubDenomination::Minute:
 			value *= bigint("60");
 			break;
@@ -2491,6 +2495,8 @@ string FunctionType::richIdentifier() const
 	case Kind::Creation: id += "creation"; break;
 	case Kind::Send: id += "send"; break;
 	case Kind::Transfer: id += "transfer"; break;
+	case Kind::TransferToken: id += "transfertoken"; break;
+	case Kind::TokenBalance: id += "tokenbalance"; break;
 	case Kind::SHA3: id += "sha3"; break;
 	case Kind::Selfdestruct: id += "selfdestruct"; break;
 	case Kind::Revert: id += "revert"; break;
@@ -2737,7 +2743,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 					"value",
 					make_shared<FunctionType>(
 						parseElementaryTypeVector({"uint"}),
-						TypePointers{copyAndSetGasOrValue(false, true)},
+						TypePointers{copyAndSetGasOrValue(false, true, false)},
 						strings(),
 						strings(),
 						Kind::SetValue,
@@ -2745,7 +2751,8 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 						StateMutability::NonPayable,
 						nullptr,
 						m_gasSet,
-						m_valueSet
+						m_valueSet,
+						m_tokenSet
 					)
 				));
 		}
@@ -2754,7 +2761,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 				"gas",
 				make_shared<FunctionType>(
 					parseElementaryTypeVector({"uint"}),
-					TypePointers{copyAndSetGasOrValue(true, false)},
+					TypePointers{copyAndSetGasOrValue(true, false, false)},
 					strings(),
 					strings(),
 					Kind::SetGas,
@@ -2762,7 +2769,8 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 					StateMutability::NonPayable,
 					nullptr,
 					m_gasSet,
-					m_valueSet
+					m_valueSet,
+					m_tokenSet
 				)
 			));
 		return members;
@@ -2893,7 +2901,7 @@ TypePointers FunctionType::parseElementaryTypeVector(strings const& _types)
 	return pointers;
 }
 
-TypePointer FunctionType::copyAndSetGasOrValue(bool _setGas, bool _setValue) const
+TypePointer FunctionType::copyAndSetGasOrValue(bool _setGas, bool _setValue, bool _setToken) const
 {
 	return make_shared<FunctionType>(
 		m_parameterTypes,
@@ -2906,6 +2914,7 @@ TypePointer FunctionType::copyAndSetGasOrValue(bool _setGas, bool _setValue) con
 		m_declaration,
 		m_gasSet || _setGas,
 		m_valueSet || _setValue,
+		m_tokenSet || _setToken,
 		m_bound
 	);
 }
@@ -2946,6 +2955,7 @@ FunctionTypePointer FunctionType::asMemberFunction(bool _inLibrary, bool _bound)
 		m_declaration,
 		m_gasSet,
 		m_valueSet,
+		m_tokenSet,
 		_bound
 	);
 }
@@ -3173,6 +3183,8 @@ MemberList::MemberMap MagicType::nativeMembers(ContractDefinition const*) const
 			{"sender", make_shared<IntegerType>(160, IntegerType::Modifier::Address)},
 			{"gas", make_shared<IntegerType>(256)},
 			{"value", make_shared<IntegerType>(256)},
+			{"tokenvalue", make_shared<IntegerType>(256)},
+			{"tokenid", make_shared<IntegerType>(256, IntegerType::Modifier::TokenId)},
 			{"data", make_shared<ArrayType>(DataLocation::CallData)},
 			{"sig", make_shared<FixedBytesType>(4)}
 		});

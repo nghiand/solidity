@@ -46,3 +46,8 @@ browse.VC.db
 CMakeLists.txt.user
 /CMakeSettings.json
 /.vs
+
+boost*
+upload
+soljson.js
+cmake-build-debug

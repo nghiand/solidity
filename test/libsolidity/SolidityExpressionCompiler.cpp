@@ -211,12 +211,12 @@ BOOST_AUTO_TEST_CASE(int_literal)
 	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
 }
 
-BOOST_AUTO_TEST_CASE(int_with_wei_ether_subdenomination)
+BOOST_AUTO_TEST_CASE(int_with_matoshi_mcash_subdenomination)
 {
 	char const* sourceCode = R"(
 		contract test {
 			function test () {
-				 var x = 1 wei;
+				 var x = 1 matoshi;
 			}
 		}
 	)";
@@ -226,48 +226,18 @@ BOOST_AUTO_TEST_CASE(int_with_wei_ether_subdenomination)
 	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
 }
 
-BOOST_AUTO_TEST_CASE(int_with_szabo_ether_subdenomination)
+BOOST_AUTO_TEST_CASE(int_with_mcash_mcash_subdenomination)
 {
 	char const* sourceCode = R"(
 		contract test {
 			function test () {
-				 var x = 1 szabo;
+				 var x = 1 mcash;
 			}
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode);
 
-	bytes expectation({byte(Instruction::PUSH5), 0xe8, 0xd4, 0xa5, 0x10, 0x00});
-	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
-}
-
-BOOST_AUTO_TEST_CASE(int_with_finney_ether_subdenomination)
-{
-	char const* sourceCode = R"(
-		contract test {
-			function test ()
-			{
-				 var x = 1 finney;
-			}
-		})";
-	bytes code = compileFirstExpression(sourceCode);
-
-	bytes expectation({byte(Instruction::PUSH7), 0x3, 0x8d, 0x7e, 0xa4, 0xc6, 0x80, 0x00});
-	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
-}
-
-BOOST_AUTO_TEST_CASE(int_with_ether_ether_subdenomination)
-{
-	char const* sourceCode = R"(
-		contract test {
-			function test () {
-				 var x = 1 ether;
-			}
-		}
-	)";
-	bytes code = compileFirstExpression(sourceCode);
-
-	bytes expectation({byte(Instruction::PUSH8), 0xd, 0xe0, 0xb6, 0xb3, 0xa7, 0x64, 0x00, 0x00});
+	bytes expectation({byte(Instruction::PUSH4), 0x5, 0xf5, 0xe1, 0x0});
 	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
 }
 

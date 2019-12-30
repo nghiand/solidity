@@ -678,6 +678,76 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 				m_context.appendConditionalRevert(true);
 			}
 			break;
+		case FunctionType::Kind::TransferToken:
+			_functionCall.expression().accept(*this);
+			// Provide the gas stipend manually at first because we may send zero ether.
+			// Will be zeroed if we send more than zero ether.
+			m_context << u256(eth::GasCosts::callStipend);
+			arguments.front()->accept(*this);
+			utils().convertType(
+					*arguments.front()->annotation().type,
+					*function.parameterTypes().front(), true
+			);
+			// gas <- gas * !value
+			m_context << Instruction::SWAP1 << Instruction::DUP2;
+			m_context << Instruction::ISZERO << Instruction::MUL << Instruction::SWAP1;
+			arguments[1]->accept(*this);
+//            utils().convertType(
+//                    *arguments[1]->annotation().type,
+//                    *function.parameterTypes()[1], true
+//            );
+
+			// will be removed in next release
+			m_context << Instruction::DUP1 << Instruction::ISZERO;
+			m_context.appendConditionalRevert(false);
+			m_context << Instruction::DUP1 << ((u256(1) << 64) / 2);
+			m_context << Instruction::GT << Instruction::ISZERO;
+			m_context.appendConditionalRevert(false);
+			m_context << Instruction::DUP1 << (u256(0xF4240));
+			m_context << Instruction::LT << Instruction::ISZERO;
+			m_context.appendConditionalRevert(false);
+
+			// now on Stack:
+			//   tokenId
+			//   value
+			//   !value * gas
+			appendExternalFunctionCall(
+				FunctionType(
+					TypePointers{},
+					TypePointers{},
+					strings(),
+					strings(),
+					FunctionType::Kind::BareCall,
+					false,
+					StateMutability::NonPayable,
+					nullptr,
+					true,
+					true,
+					true
+				),
+				{}
+			);
+
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalRevert(true);
+			break;
+		case FunctionType::Kind::TokenBalance:
+			// stack layout: address token_id
+			_functionCall.expression().accept(*this);
+			arguments[0]->accept(*this);
+			utils().convertType(*arguments[0]->annotation().type, *function.parameterTypes()[0], true);
+			// will be removed in next release
+			m_context << Instruction::DUP1 << Instruction::ISZERO;
+			m_context.appendConditionalRevert(false);
+			m_context << Instruction::DUP1 << ((u256(1) << 64) / 2);
+			m_context << Instruction::GT << Instruction::ISZERO;
+			m_context.appendConditionalRevert(false);
+			m_context << Instruction::DUP1 << (u256(0xF4240));
+			m_context << Instruction::LT << Instruction::ISZERO;
+			m_context.appendConditionalRevert(false);
+
+			m_context << Instruction::TOKENBALANCE;
+			break;
 		case FunctionType::Kind::Selfdestruct:
 			arguments.front()->accept(*this);
 			utils().convertType(*arguments.front()->annotation().type, *function.parameterTypes().front(), true);
@@ -1127,6 +1197,8 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 				case FunctionType::Kind::BareCallCode:
 				case FunctionType::Kind::BareDelegateCall:
 				case FunctionType::Kind::Transfer:
+				case FunctionType::Kind::TransferToken:
+				case FunctionType::Kind::TokenBalance:
 					_memberAccess.expression().accept(*this);
 					m_context << funType->externalIdentifier();
 					break;
@@ -1237,7 +1309,7 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 				);
 				m_context << Instruction::BALANCE;
 			}
-			else if ((set<string>{"send", "transfer", "call", "callcode", "delegatecall"}).count(member))
+			else if ((set<string>{"send", "transfer", "call", "callcode", "delegatecall", "transfertoken", "tokenbalance"}).count(member))
 				utils().convertType(
 					*_memberAccess.expression().annotation().type,
 					IntegerType(160, IntegerType::Modifier::Address),
@@ -1275,6 +1347,10 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			m_context << Instruction::CALLER;
 		else if (member == "value")
 			m_context << Instruction::CALLVALUE;
+        else if (member == "tokenvalue")
+            m_context << Instruction::CALLTOKENVALUE;
+        else if (member == "tokenid")
+            m_context << Instruction::CALLTOKENID;
 		else if (member == "origin")
 			m_context << Instruction::ORIGIN;
 		else if (member == "gas")
@@ -1698,8 +1774,8 @@ void ExpressionCompiler::appendShiftOperatorCode(Token::Value _operator, Type co
 		solAssert(amountType->integerType(), "");
 		solAssert(!amountType->integerType()->isSigned(), "");
 	}
-	else if (auto amountType = dynamic_cast<IntegerType const*>(&_shiftAmountType))
-		c_amountSigned = amountType->isSigned();
+	else if (auto pIntegerType = dynamic_cast<IntegerType const*>(&_shiftAmountType))
+		c_amountSigned = pIntegerType->isSigned();
 	else
 		solAssert(false, "Invalid shift amount type.");
 
@@ -1746,6 +1822,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 
 	// Assumed stack content here:
 	// <stack top>
+	// token [if _functionType.tokenSet()]
 	// value [if _functionType.valueSet()]
 	// gas [if _functionType.gasSet()]
 	// self object [if bound - moved to top right away]
@@ -1753,16 +1830,19 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	// contract address
 
 	unsigned selfSize = _functionType.bound() ? _functionType.selfType()->sizeOnStack() : 0;
-	unsigned gasValueSize = (_functionType.gasSet() ? 1 : 0) + (_functionType.valueSet() ? 1 : 0);
+	unsigned tokenSize = _functionType.tokenSet() ? 1: 0;
+	unsigned gasValueSize = (_functionType.gasSet() ? 1 : 0) + (_functionType.valueSet() ? 1 : 0) + tokenSize;
 	unsigned contractStackPos = m_context.currentToBaseStackOffset(1 + gasValueSize + selfSize + (_functionType.isBareCall() ? 0 : 1));
 	unsigned gasStackPos = m_context.currentToBaseStackOffset(gasValueSize);
-	unsigned valueStackPos = m_context.currentToBaseStackOffset(1);
+	unsigned valueStackPos = m_context.currentToBaseStackOffset(1 + tokenSize);
+	unsigned tokenStackPos = m_context.currentToBaseStackOffset(1);
 
 	// move self object to top
 	if (_functionType.bound())
 		utils().moveToStackTop(gasValueSize, _functionType.selfType()->sizeOnStack());
 
 	auto funKind = _functionType.kind();
+	bool isTokenCall = _functionType.tokenSet();
 	bool returnSuccessCondition = funKind == FunctionType::Kind::BareCall || funKind == FunctionType::Kind::BareCallCode || funKind == FunctionType::Kind::BareDelegateCall;
 	bool isCallCode = funKind == FunctionType::Kind::BareCallCode || funKind == FunctionType::Kind::CallCode;
 	bool isDelegateCall = funKind == FunctionType::Kind::BareDelegateCall || funKind == FunctionType::Kind::DelegateCall;
@@ -1821,6 +1901,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 			m_context << swapInstruction(gasValueSize - i);
 		gasStackPos++;
 		valueStackPos++;
+		tokenStackPos++;
 	}
 	if (_functionType.bound())
 	{
@@ -1882,6 +1963,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	// Stack now:
 	// <stack top>
 	// input_memory_end
+	// token [if _functionType.tokenSet()]
 	// value [if _functionType.valueSet()]
 	// gas [if _functionType.gasSet()]
 	// function identifier [unless bare]
@@ -1912,8 +1994,11 @@ void ExpressionCompiler::appendExternalFunctionCall(
 		solAssert(!_functionType.valueSet(), "Value set for delegatecall");
 	else if (useStaticCall)
 		solAssert(!_functionType.valueSet(), "Value set for staticcall");
-	else if (_functionType.valueSet())
+	else if (_functionType.valueSet()) {
+		if (_functionType.tokenSet())
+			m_context << dupInstruction(m_context.baseToCurrentStackOffset(tokenStackPos));
 		m_context << dupInstruction(m_context.baseToCurrentStackOffset(valueStackPos));
+	}
 	else
 		m_context << u256(0);
 	m_context << dupInstruction(m_context.baseToCurrentStackOffset(contractStackPos));
@@ -1945,7 +2030,9 @@ void ExpressionCompiler::appendExternalFunctionCall(
 		m_context << gasNeededByCaller << Instruction::GAS << Instruction::SUB;
 	}
 	// Order is important here, STATICCALL might overlap with DELEGATECALL.
-	if (isDelegateCall)
+	if (isTokenCall)
+		m_context << Instruction::CALLTOKEN;
+	else if (isDelegateCall)
 		m_context << Instruction::DELEGATECALL;
 	else if (isCallCode)
 		m_context << Instruction::CALLCODE;
@@ -1956,6 +2043,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 
 	unsigned remainsSize =
 		2 + // contract address, input_memory_end
+		_functionType.tokenSet() +
 		_functionType.valueSet() +
 		_functionType.gasSet() +
 		(!_functionType.isBareCall() || manualFunctionId);
