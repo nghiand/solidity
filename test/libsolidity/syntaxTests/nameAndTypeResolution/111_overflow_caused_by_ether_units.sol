@@ -1,8 +1,8 @@
 contract c {
     constructor() public {
-        a = 115792089237316195423570985008687907853269984665640564039458 ether;
+        a = 1157920892373161954235709850086879078532699846656405640394581231456187 mcash;
     }
     uint256 a;
 }
 // ----
-// TypeError: (52-118): Type int_const 1157...(70 digits omitted)...0000 is not implicitly convertible to expected type uint256.
+// TypeError: (52-128): Type int_const 1157...(70 digits omitted)...0000 is not implicitly convertible to expected type uint256.

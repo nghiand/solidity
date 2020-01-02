@@ -507,6 +507,8 @@ IntegerType::IntegerType(unsigned _bits, IntegerType::Modifier _modifier):
 
 string IntegerType::richIdentifier() const
 {
+	if (isTokenId())
+		return "t_token";
 	return "t_" + string(isSigned() ? "" : "u") + "int" + to_string(numBits());
 }
 
@@ -517,6 +519,8 @@ BoolResult IntegerType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 		IntegerType const& convertTo = dynamic_cast<IntegerType const&>(_convertTo);
 		if (convertTo.m_bits < m_bits)
 			return false;
+		if (isTokenId())
+		    return convertTo.isTokenId();
 		else if (isSigned())
 			return convertTo.isSigned();
 		else
@@ -564,6 +568,8 @@ bool IntegerType::operator==(Type const& _other) const
 
 string IntegerType::toString(bool) const
 {
+	if (isTokenId())
+	    return "token";
 	string prefix = isSigned() ? "int" : "uint";
 	return prefix + dev::toString(m_bits);
 }
@@ -595,6 +601,8 @@ TypeResult IntegerType::binaryOperatorResult(Token _operator, Type const* _other
 	if (TokenTraits::isShiftOp(_operator))
 	{
 		// Shifts are not symmetric with respect to the type
+		if (isTokenId())
+			return TypePointer();
 		if (isValidShiftAndAmountType(_operator, *_other))
 			return this;
 		else
@@ -612,6 +620,9 @@ TypeResult IntegerType::binaryOperatorResult(Token _operator, Type const* _other
 		return nullptr;
 	if (auto intType = dynamic_cast<IntegerType const*>(commonType))
 	{
+		if (intType->isTokenId())
+			return TypePointer();
+		// Signed EXP is not allowed
 		if (Token::Exp == _operator && intType->isSigned())
 			return TypeResult::err("Exponentiation is not allowed for signed integer types.");
 	}
@@ -839,18 +850,12 @@ tuple<bool, rational> RationalNumberType::isValidLiteral(Literal const& _literal
 	switch (_literal.subDenomination())
 	{
 		case Literal::SubDenomination::None:
-		case Literal::SubDenomination::Wei:
 		case Literal::SubDenomination::Second:
+		case Literal::SubDenomination::Matoshi:
 			break;
-		case Literal::SubDenomination::Szabo:
-			value *= bigint("1000000000000");
-			break;
-		case Literal::SubDenomination::Finney:
-			value *= bigint("1000000000000000");
-			break;
-		case Literal::SubDenomination::Ether:
-			value *= bigint("1000000000000000000");
-			break;
+	    case Literal::SubDenomination::Mcash:
+	        value *= bigint("100000000");
+	        break;
 		case Literal::SubDenomination::Minute:
 			value *= bigint("60");
 			break;
@@ -2649,6 +2654,8 @@ string FunctionType::richIdentifier() const
 	case Kind::Send: id += "send"; break;
 	case Kind::Transfer: id += "transfer"; break;
 	case Kind::KECCAK256: id += "keccak256"; break;
+	case Kind::TransferToken: id += "transfertoken"; break;
+	case Kind::TokenBalance: id += "tokenbalance"; break;
 	case Kind::Selfdestruct: id += "selfdestruct"; break;
 	case Kind::Revert: id += "revert"; break;
 	case Kind::ECRecover: id += "ecrecover"; break;
@@ -2906,7 +2913,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 					"value",
 					TypeProvider::function(
 						parseElementaryTypeVector({"uint"}),
-						TypePointers{copyAndSetGasOrValue(false, true)},
+						TypePointers{copyAndSetGasOrValue(false, true, false)},
 						strings(1, ""),
 						strings(1, ""),
 						Kind::SetValue,
@@ -2914,7 +2921,8 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 						StateMutability::NonPayable,
 						nullptr,
 						m_gasSet,
-						m_valueSet
+						m_valueSet,
+						m_tokenSet
 					)
 				);
 		}
@@ -2923,7 +2931,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 				"gas",
 				TypeProvider::function(
 					parseElementaryTypeVector({"uint"}),
-					TypePointers{copyAndSetGasOrValue(true, false)},
+					TypePointers{copyAndSetGasOrValue(true, false, false)},
 					strings(1, ""),
 					strings(1, ""),
 					Kind::SetGas,
@@ -2931,7 +2939,8 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 					StateMutability::NonPayable,
 					nullptr,
 					m_gasSet,
-					m_valueSet
+					m_valueSet,
+					m_tokenSet
 				)
 			);
 		return members;
@@ -3135,7 +3144,7 @@ TypePointers FunctionType::parseElementaryTypeVector(strings const& _types)
 	return pointers;
 }
 
-TypePointer FunctionType::copyAndSetGasOrValue(bool _setGas, bool _setValue) const
+TypePointer FunctionType::copyAndSetGasOrValue(bool _setGas, bool _setValue, bool _setToken) const
 {
 	return TypeProvider::function(
 		m_parameterTypes,
@@ -3148,6 +3157,7 @@ TypePointer FunctionType::copyAndSetGasOrValue(bool _setGas, bool _setValue) con
 		m_declaration,
 		m_gasSet || _setGas,
 		m_valueSet || _setValue,
+		m_tokenSet || _setToken,
 		m_bound
 	);
 }
@@ -3188,6 +3198,7 @@ FunctionTypePointer FunctionType::asCallableFunction(bool _inLibrary, bool _boun
 		m_declaration,
 		m_gasSet,
 		m_valueSet,
+		m_tokenSet,
 		_bound
 	);
 }
@@ -3465,6 +3476,8 @@ MemberList::MemberMap MagicType::nativeMembers(ContractDefinition const*) const
 			{"sender", TypeProvider::payableAddress()},
 			{"gas", TypeProvider::uint256()},
 			{"value", TypeProvider::uint256()},
+			{"tokenvalue", TypeProvider::uint256()},
+			{"tokenid", TypeProvider::tokenId()},
 			{"data", TypeProvider::array(DataLocation::CallData)},
 			{"sig", TypeProvider::fixedBytes(4)}
 		});
