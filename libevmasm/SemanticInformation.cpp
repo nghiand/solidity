@@ -141,6 +141,7 @@ bool SemanticInformation::isDeterministic(AssemblyItem const& _item)
 	switch (_item.instruction())
 	{
 	case Instruction::CALL:
+	case Instruction::CALLTOKEN:
 	case Instruction::CALLCODE:
 	case Instruction::DELEGATECALL:
 	case Instruction::STATICCALL:
@@ -150,6 +151,7 @@ bool SemanticInformation::isDeterministic(AssemblyItem const& _item)
 	case Instruction::PC:
 	case Instruction::MSIZE: // depends on previous writes and reads, not only on content
 	case Instruction::BALANCE: // depends on previous calls
+	case Instruction::TOKENBALANCE:
 	case Instruction::EXTCODESIZE:
 	case Instruction::EXTCODEHASH:
 	case Instruction::RETURNDATACOPY: // depends on previous calls
@@ -172,6 +174,7 @@ bool SemanticInformation::movable(Instruction _instruction)
 	{
 	case Instruction::KECCAK256:
 	case Instruction::BALANCE:
+	case Instruction::TOKENBALANCE:
 	case Instruction::EXTCODESIZE:
 	case Instruction::EXTCODEHASH:
 	case Instruction::RETURNDATASIZE:
@@ -197,6 +200,7 @@ bool SemanticInformation::invalidatesMemory(Instruction _instruction)
 	case Instruction::MSTORE:
 	case Instruction::MSTORE8:
 	case Instruction::CALL:
+	case Instruction::CALLTOKEN:
 	case Instruction::CALLCODE:
 	case Instruction::DELEGATECALL:
 	case Instruction::STATICCALL:
@@ -211,6 +215,7 @@ bool SemanticInformation::invalidatesStorage(Instruction _instruction)
 	switch (_instruction)
 	{
 	case Instruction::CALL:
+	case Instruction::CALLTOKEN:
 	case Instruction::CALLCODE:
 	case Instruction::DELEGATECALL:
 	case Instruction::CREATE:
@@ -228,9 +233,12 @@ bool SemanticInformation::invalidInPureFunctions(Instruction _instruction)
 	{
 	case Instruction::ADDRESS:
 	case Instruction::BALANCE:
+	case Instruction::TOKENBALANCE:
 	case Instruction::ORIGIN:
 	case Instruction::CALLER:
 	case Instruction::CALLVALUE:
+    case Instruction::CALLTOKENVALUE:
+    case Instruction::CALLTOKENID:
 	case Instruction::GAS:
 	case Instruction::GASPRICE:
 	case Instruction::EXTCODESIZE:
@@ -265,6 +273,7 @@ bool SemanticInformation::invalidInViewFunctions(Instruction _instruction)
 	case Instruction::LOG4:
 	case Instruction::CREATE:
 	case Instruction::CALL:
+	case Instruction::CALLTOKEN:
 	case Instruction::CALLCODE:
 	case Instruction::DELEGATECALL:
 	case Instruction::CREATE2:

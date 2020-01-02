@@ -342,7 +342,7 @@ BOOST_AUTO_TEST_CASE(basic_compilation)
 	BOOST_CHECK(contract["evm"]["gasEstimates"].isObject());
 	BOOST_CHECK_EQUAL(
 		dev::jsonCompactPrint(contract["evm"]["gasEstimates"]),
-		"{\"creation\":{\"codeDepositCost\":\"10600\",\"executionCost\":\"66\",\"totalCost\":\"10666\"}}"
+		"{\"creation\":{\"codeDepositCost\":\"10600\",\"executionCost\":\"114\",\"totalCost\":\"10714\"}}"
 	);
 	// Lets take the top level `.code` section (the "deployer code"), that should expose most of the features of
 	// the assembly JSON. What we want to check here is Operation, Push, PushTag, PushSub, PushSubSize and Tag.

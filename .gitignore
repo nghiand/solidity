@@ -52,3 +52,8 @@ CMakeLists.txt.user
 /.vs
 /.cproject
 /.project
+
+boost*
+upload
+soljson.js
+cmake-build-debug

@@ -53,6 +53,7 @@ namespace GasCosts
 	}
 	inline unsigned balanceGas(EVMVersion _evmVersion)
 	{
+//	    return 20;
 		return _evmVersion >= EVMVersion::tangerineWhistle() ? 400 : 20;
 	}
 	static unsigned const expGas = 10;

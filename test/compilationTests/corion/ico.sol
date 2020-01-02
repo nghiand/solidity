@@ -305,9 +305,9 @@ contract ico is safeMath {
             affilateAddress = address(0x00);
         }
         uint256 _value = msg.value;
-        if ( beneficiaryAddress.balance < 0.2 ether ) {
-            require( beneficiaryAddress.send(0.2 ether) );
-            _value = safeSub(_value, 0.2 ether);
+        if ( beneficiaryAddress.balance < 0.2 mcash ) {
+            require( beneficiaryAddress.send(0.2 mcash) );
+            _value = safeSub(_value, 0.2 mcash);
         }
         uint256 _reward = getIcoReward(_value);
         require( _reward > 0 );
@@ -364,7 +364,7 @@ contract ico is safeMath {
                 x = (value * 1e6 * USD_ETC_exchange rate / 1e4 / 1e18) * bonus percentage
                 2.700000 token = (1e18 * 1e6 * 22500 / 1e4 / 1e18) * 1.20
         */
-        reward = (value * 1e6 * icoExchangeRate / icoExchangeRateM / 1 ether) * (ICObonus() + 100) / 100;
+        reward = (value * 1e6 * icoExchangeRate / icoExchangeRateM / 1 mcash) * (ICObonus() + 100) / 100;
         if ( reward < 5e6) { return 0; }
     }
 

@@ -317,6 +317,8 @@ TypePointer Type::fromElementaryTypeName(ElementaryTypeNameToken const& _type)
 		return make_shared<FixedBytesType>(1);
 	case Token::Address:
 		return make_shared<AddressType>(StateMutability::NonPayable);
+    case Token::TokenId:
+        return make_shared<IntegerType>(256, IntegerType::Modifier::TokenId);
 	case Token::Bool:
 		return make_shared<BoolType>();
 	case Token::Bytes:
@@ -588,6 +590,8 @@ IntegerType::IntegerType(unsigned _bits, IntegerType::Modifier _modifier):
 
 string IntegerType::richIdentifier() const
 {
+	if (isTokenId())
+		return "t_token";
 	return "t_" + string(isSigned() ? "" : "u") + "int" + to_string(numBits());
 }
 
@@ -598,6 +602,8 @@ BoolResult IntegerType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 		IntegerType const& convertTo = dynamic_cast<IntegerType const&>(_convertTo);
 		if (convertTo.m_bits < m_bits)
 			return false;
+		if (isTokenId())
+		    return convertTo.isTokenId();
 		else if (isSigned())
 			return convertTo.isSigned();
 		else
@@ -645,6 +651,8 @@ bool IntegerType::operator==(Type const& _other) const
 
 string IntegerType::toString(bool) const
 {
+	if (isTokenId())
+	    return "token";
 	string prefix = isSigned() ? "int" : "uint";
 	return prefix + dev::toString(m_bits);
 }
@@ -676,6 +684,8 @@ TypeResult IntegerType::binaryOperatorResult(Token _operator, TypePointer const&
 	if (TokenTraits::isShiftOp(_operator))
 	{
 		// Shifts are not symmetric with respect to the type
+		if (isTokenId())
+			return TypePointer();
 		if (isValidShiftAndAmountType(_operator, *_other))
 			return shared_from_this();
 		else
@@ -693,6 +703,9 @@ TypeResult IntegerType::binaryOperatorResult(Token _operator, TypePointer const&
 		return TypePointer();
 	if (auto intType = dynamic_pointer_cast<IntegerType const>(commonType))
 	{
+		if (intType->isTokenId())
+			return TypePointer();
+		// Signed EXP is not allowed
 		if (Token::Exp == _operator && intType->isSigned())
 			return TypeResult{"Exponentiation is not allowed for signed integer types."};
 	}
@@ -937,18 +950,12 @@ tuple<bool, rational> RationalNumberType::isValidLiteral(Literal const& _literal
 	switch (_literal.subDenomination())
 	{
 		case Literal::SubDenomination::None:
-		case Literal::SubDenomination::Wei:
 		case Literal::SubDenomination::Second:
+		case Literal::SubDenomination::Matoshi:
 			break;
-		case Literal::SubDenomination::Szabo:
-			value *= bigint("1000000000000");
-			break;
-		case Literal::SubDenomination::Finney:
-			value *= bigint("1000000000000000");
-			break;
-		case Literal::SubDenomination::Ether:
-			value *= bigint("1000000000000000000");
-			break;
+	    case Literal::SubDenomination::Mcash:
+	        value *= bigint("100000000");
+	        break;
 		case Literal::SubDenomination::Minute:
 			value *= bigint("60");
 			break;
@@ -2658,6 +2665,8 @@ string FunctionType::richIdentifier() const
 	case Kind::Send: id += "send"; break;
 	case Kind::Transfer: id += "transfer"; break;
 	case Kind::KECCAK256: id += "keccak256"; break;
+	case Kind::TransferToken: id += "transfertoken"; break;
+	case Kind::TokenBalance: id += "tokenbalance"; break;
 	case Kind::Selfdestruct: id += "selfdestruct"; break;
 	case Kind::Revert: id += "revert"; break;
 	case Kind::ECRecover: id += "ecrecover"; break;
@@ -2912,7 +2921,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 					"value",
 					make_shared<FunctionType>(
 						parseElementaryTypeVector({"uint"}),
-						TypePointers{copyAndSetGasOrValue(false, true)},
+						TypePointers{copyAndSetGasOrValue(false, true, false)},
 						strings(1, ""),
 						strings(1, ""),
 						Kind::SetValue,
@@ -2920,7 +2929,8 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 						StateMutability::NonPayable,
 						nullptr,
 						m_gasSet,
-						m_valueSet
+						m_valueSet,
+						m_tokenSet
 					)
 				);
 		}
@@ -2929,7 +2939,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 				"gas",
 				make_shared<FunctionType>(
 					parseElementaryTypeVector({"uint"}),
-					TypePointers{copyAndSetGasOrValue(true, false)},
+					TypePointers{copyAndSetGasOrValue(true, false, false)},
 					strings(1, ""),
 					strings(1, ""),
 					Kind::SetGas,
@@ -2937,7 +2947,8 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const*) con
 					StateMutability::NonPayable,
 					nullptr,
 					m_gasSet,
-					m_valueSet
+					m_valueSet,
+					m_tokenSet
 				)
 			);
 		return members;
@@ -3062,14 +3073,16 @@ string FunctionType::externalSignature() const
 		solAssert(false, "Invalid function type for requesting external signature.");
 	}
 
-	bool const inLibrary = dynamic_cast<ContractDefinition const&>(*m_declaration->scope()).isLibrary();
-	FunctionTypePointer external = interfaceFunctionType();
-	solAssert(!!external, "External function type requested.");
-	auto parameterTypes = external->parameterTypes();
-	auto typeStrings = parameterTypes | boost::adaptors::transformed([&](TypePointer _t) -> string
+	bool const inLibrary = kind() != Kind::Event && dynamic_cast<ContractDefinition const&>(*m_declaration->scope()).isLibrary();
+
+	boost::optional<TypePointers> extParams = transformParametersToExternal(m_parameterTypes, inLibrary);
+
+	solAssert(extParams, "");
+
+	auto typeStrings = *extParams | boost::adaptors::transformed([&](TypePointer _t) -> string
 	{
-		solAssert(_t, "Parameter should have external type.");
 		string typeName = _t->signatureInExternalFunction(inLibrary);
+
 		if (inLibrary && _t->dataStoredIn(DataLocation::Storage))
 			typeName += " storage";
 		return typeName;
@@ -3111,7 +3124,7 @@ TypePointers FunctionType::parseElementaryTypeVector(strings const& _types)
 	return pointers;
 }
 
-TypePointer FunctionType::copyAndSetGasOrValue(bool _setGas, bool _setValue) const
+TypePointer FunctionType::copyAndSetGasOrValue(bool _setGas, bool _setValue, bool _setToken) const
 {
 	return make_shared<FunctionType>(
 		m_parameterTypes,
@@ -3124,6 +3137,7 @@ TypePointer FunctionType::copyAndSetGasOrValue(bool _setGas, bool _setValue) con
 		m_declaration,
 		m_gasSet || _setGas,
 		m_valueSet || _setValue,
+		m_tokenSet || _setToken,
 		m_bound
 	);
 }
@@ -3164,6 +3178,7 @@ FunctionTypePointer FunctionType::asCallableFunction(bool _inLibrary, bool _boun
 		m_declaration,
 		m_gasSet,
 		m_valueSet,
+		m_tokenSet,
 		_bound
 	);
 }
@@ -3420,6 +3435,8 @@ MemberList::MemberMap MagicType::nativeMembers(ContractDefinition const*) const
 			{"sender", make_shared<AddressType>(StateMutability::Payable)},
 			{"gas", make_shared<IntegerType>(256)},
 			{"value", make_shared<IntegerType>(256)},
+			{"tokenvalue", make_shared<IntegerType>(256)},
+			{"tokenid", make_shared<IntegerType>(256, IntegerType::Modifier::TokenId)},
 			{"data", make_shared<ArrayType>(DataLocation::CallData)},
 			{"sig", make_shared<FixedBytesType>(4)}
 		});
