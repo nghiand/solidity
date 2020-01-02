@@ -3073,16 +3073,14 @@ string FunctionType::externalSignature() const
 		solAssert(false, "Invalid function type for requesting external signature.");
 	}
 
-	bool const inLibrary = kind() != Kind::Event && dynamic_cast<ContractDefinition const&>(*m_declaration->scope()).isLibrary();
-
-	boost::optional<TypePointers> extParams = transformParametersToExternal(m_parameterTypes, inLibrary);
-
-	solAssert(extParams, "");
-
-	auto typeStrings = *extParams | boost::adaptors::transformed([&](TypePointer _t) -> string
+	bool const inLibrary = dynamic_cast<ContractDefinition const&>(*m_declaration->scope()).isLibrary();
+	FunctionTypePointer external = interfaceFunctionType();
+	solAssert(!!external, "External function type requested.");
+	auto parameterTypes = external->parameterTypes();
+	auto typeStrings = parameterTypes | boost::adaptors::transformed([&](TypePointer _t) -> string
 	{
+		solAssert(_t, "Parameter should have external type.");
 		string typeName = _t->signatureInExternalFunction(inLibrary);
-
 		if (inLibrary && _t->dataStoredIn(DataLocation::Storage))
 			typeName += " storage";
 		return typeName;

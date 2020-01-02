@@ -186,11 +186,9 @@ namespace langutil
 	K(View, "view", 0)                                                 \
 	K(While, "while", 0)                                               \
 	\
-	/* Ether subdenominations */                                       \
-	K(SubWei, "wei", 0)                                                \
-	K(SubSzabo, "szabo", 0)                                            \
-	K(SubFinney, "finney", 0)                                          \
-	K(SubEther, "ether", 0)                                            \
+	/* Mcash subdenominations */                                       \
+	K(SubMatoshi, "matoshi", 0)                                        \
+	K(SubMcash, "mcash", 0)                                            \
 	K(SubSecond, "seconds", 0)                                         \
 	K(SubMinute, "minutes", 0)                                         \
 	K(SubHour, "hours", 0)                                             \
@@ -204,6 +202,7 @@ namespace langutil
 	K(Byte, "byte", 0)                                                 \
 	K(String, "string", 0)                                             \
 	K(Address, "address", 0)                                           \
+	K(TokenId, "token", 0)										   \
 	K(Bool, "bool", 0)                                                 \
 	K(Fixed, "fixed", 0)                                               \
 	K(UFixed, "ufixed", 0)                                             \
@@ -306,7 +305,7 @@ namespace TokenTraits
 			|| op == Token::Pure || op == Token::View || op == Token::Payable;
 	}
 
-	constexpr bool isEtherSubdenomination(Token op) { return op == Token::SubWei || op == Token::SubSzabo || op == Token::SubFinney || op == Token::SubEther; }
+	constexpr bool isMcashSubdenomination(Token op) { return op == Token::SubMcash || op == Token::SubMatoshi; }
 	constexpr bool isTimeSubdenomination(Token op) { return op == Token::SubSecond || op == Token::SubMinute || op == Token::SubHour || op == Token::SubDay || op == Token::SubWeek || op == Token::SubYear; }
 	constexpr bool isReservedKeyword(Token op) { return (Token::Abstract <= op && op <= Token::Unchecked); }
 
