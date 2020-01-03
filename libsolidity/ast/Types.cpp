@@ -468,12 +468,14 @@ MemberList::MemberMap AddressType::nativeMembers(ContractDefinition const*) cons
 		{"call", TypeProvider::function(strings{"bytes memory"}, strings{"bool", "bytes memory"}, FunctionType::Kind::BareCall, false, StateMutability::Payable)},
 		{"callcode", TypeProvider::function(strings{"bytes memory"}, strings{"bool", "bytes memory"}, FunctionType::Kind::BareCallCode, false, StateMutability::Payable)},
 		{"delegatecall", TypeProvider::function(strings{"bytes memory"}, strings{"bool", "bytes memory"}, FunctionType::Kind::BareDelegateCall, false, StateMutability::NonPayable)},
-		{"staticcall", TypeProvider::function(strings{"bytes memory"}, strings{"bool", "bytes memory"}, FunctionType::Kind::BareStaticCall, false, StateMutability::View)}
+		{"staticcall", TypeProvider::function(strings{"bytes memory"}, strings{"bool", "bytes memory"}, FunctionType::Kind::BareStaticCall, false, StateMutability::View)},
+		{"tokenbalance", TypeProvider::function(strings{"token"}, strings{"uint"}, FunctionType::Kind::TokenBalance, false, StateMutability::View)},
 	};
 	if (m_stateMutability == StateMutability::Payable)
 	{
 		members.emplace_back(MemberList::Member{"send", TypeProvider::function(strings{"uint"}, strings{"bool"}, FunctionType::Kind::Send, false, StateMutability::NonPayable)});
 		members.emplace_back(MemberList::Member{"transfer", TypeProvider::function(strings{"uint"}, strings(), FunctionType::Kind::Transfer, false, StateMutability::NonPayable)});
+		members.emplace_back(MemberList::Member{"transfertoken", TypeProvider::function(strings{"uint", "token"}, strings(), FunctionType::Kind::TransferToken)});
 	}
 	return members;
 }
@@ -602,7 +604,7 @@ TypeResult IntegerType::binaryOperatorResult(Token _operator, Type const* _other
 	{
 		// Shifts are not symmetric with respect to the type
 		if (isTokenId())
-			return TypePointer();
+			return nullptr;
 		if (isValidShiftAndAmountType(_operator, *_other))
 			return this;
 		else
@@ -621,7 +623,7 @@ TypeResult IntegerType::binaryOperatorResult(Token _operator, Type const* _other
 	if (auto intType = dynamic_cast<IntegerType const*>(commonType))
 	{
 		if (intType->isTokenId())
-			return TypePointer();
+			return nullptr;
 		// Signed EXP is not allowed
 		if (Token::Exp == _operator && intType->isSigned())
 			return TypeResult::err("Exponentiation is not allowed for signed integer types.");
@@ -2692,6 +2694,8 @@ string FunctionType::richIdentifier() const
 		id += "gas";
 	if (m_valueSet)
 		id += "value";
+//	if (m_tokenSet)
+//		id += "tokenid";
 	if (bound())
 		id += "bound_to" + identifierList(selfType());
 	return id;
@@ -2853,6 +2857,8 @@ unsigned FunctionType::sizeOnStack() const
 		size++;
 	if (m_valueSet)
 		size++;
+//	if (m_tokenSet)
+//		size++;
 	if (bound())
 		size += m_parameterTypes.front()->sizeOnStack();
 	return size;

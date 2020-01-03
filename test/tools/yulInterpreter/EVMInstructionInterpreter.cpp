@@ -435,6 +435,10 @@ u256 EVMInstructionInterpreter::eval(
 	case Instruction::RETURNSUB:
 	case Instruction::PUTLOCAL:
 	case Instruction::GETLOCAL:
+	case Instruction::CALLTOKEN:
+	case Instruction::TOKENBALANCE:
+	case Instruction::CALLTOKENVALUE:
+	case Instruction::CALLTOKENID:
 	{
 		yulAssert(false, "");
 		return 0;

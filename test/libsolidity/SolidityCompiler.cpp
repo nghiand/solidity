@@ -47,10 +47,10 @@ BOOST_AUTO_TEST_CASE(does_not_include_creation_time_only_internal_functions)
 	BOOST_REQUIRE_MESSAGE(compiler().compile(), "Compiling contract failed");
 	bytes const& creationBytecode = dev::test::bytecodeSansMetadata(compiler().object("C").bytecode);
 	bytes const& runtimeBytecode = dev::test::bytecodeSansMetadata(compiler().runtimeObject("C").bytecode);
-	BOOST_CHECK(creationBytecode.size() >= 160);
-	BOOST_CHECK(creationBytecode.size() <= 190);
-	BOOST_CHECK(runtimeBytecode.size() >= 50);
-	BOOST_CHECK(runtimeBytecode.size() <= 70);
+	BOOST_CHECK(creationBytecode.size() >= 120);
+	BOOST_CHECK(creationBytecode.size() <= 150);
+	BOOST_CHECK(runtimeBytecode.size() >= 10);
+	BOOST_CHECK(runtimeBytecode.size() <= 30);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

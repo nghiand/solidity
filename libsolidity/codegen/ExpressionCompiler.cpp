@@ -1284,6 +1284,9 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 				case FunctionType::Kind::Transfer:
 				case FunctionType::Kind::TransferToken:
 				case FunctionType::Kind::TokenBalance:
+					_memberAccess.expression().accept(*this);
+					m_context << funType->externalIdentifier();
+					break;
 				case FunctionType::Kind::Log0:
 				case FunctionType::Kind::Log1:
 				case FunctionType::Kind::Log2:

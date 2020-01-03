@@ -2090,7 +2090,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 		else if (auto addressType = dynamic_cast<AddressType const*>(exprType))
 		{
 			// Trigger error when using send or transfer with a non-payable fallback function.
-			if (memberName == "send" || memberName == "transfer")
+			if (memberName == "send" || memberName == "transfer" || memberName == "transfertoken")
 			{
 				solAssert(
 					addressType->stateMutability() != StateMutability::Payable,
