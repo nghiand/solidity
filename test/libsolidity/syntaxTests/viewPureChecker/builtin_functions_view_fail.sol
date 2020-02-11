@@ -16,6 +16,9 @@ contract C {
         (bool success,) = address(this).call("");
         require(success);
     }
+    function k() view public {
+        address(this).transfertoken(1000001, 1);
+    }
     function() payable external {
     }
 }
@@ -25,3 +28,4 @@ contract C {
 // TypeError: (201-228): Function declared as view, but this expression (potentially) modifies the state and thus requires non-payable (the default) or payable.
 // TypeError: (293-323): Function declared as view, but this expression (potentially) modifies the state and thus requires non-payable (the default) or payable.
 // TypeError: (414-436): Function declared as view, but this expression (potentially) modifies the state and thus requires non-payable (the default) or payable.
+// TypeError: (509-548): Function declared as view, but this expression (potentially) modifies the state and thus requires non-payable (the default) or payable.

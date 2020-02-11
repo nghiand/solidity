@@ -16,5 +16,8 @@ contract C {
         assert(true);
         x; y; z;
     }
+    function h() public {
+        address(this).transfertoken(1000001, 1);
+    }
     function() payable external {}
 }

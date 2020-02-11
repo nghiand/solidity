@@ -6,7 +6,9 @@ contract C {
         (bool delegatecallSuc,) = addr.delegatecall("");
         bool sendRet = addr.send(1);
         addr.transfer(1);
-        balance; callSuc; delegatecallSuc; sendRet;
+        uint tokenBalance = addr.tokenbalance(1000000);
+        addr.transfertoken(1000000, 3);
+        balance; callSuc; delegatecallSuc; sendRet; tokenBalance;
     }
 }
 // ----
